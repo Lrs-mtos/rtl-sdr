@@ -1,38 +1,60 @@
+# Project names
+PROJ_COLLECTOR = run_collector
+PROJ_SIMULATION = adsb_simulation
 
-#Project name
-PROJ_NAME = run_collector
-
-# .c files. Wildcard takes all files which match ".c" pattern
+# Source files
 C_SOURCE = $(wildcard ./src/*.c)
 
-# .h files.
+# Header files
 H_SOURCE = $(wildcard ./src/*.h)
 
-#Object files. As objects don't exist yet, we replace .c by .o. Object names will be the same of .c files.
-#OBJ = $(C_SOURCE: .c = .o)
-OBJ=$(subst .c,.o,$(subst src,objects,$(C_SOURCE)))
+# Object files for each executable
+OBJ_COLLECTOR = $(patsubst ./src/%.c, ./objects/collector/%.o, $(filter-out ./src/adsb_simulation.c, $(C_SOURCE)))
+OBJ_SIMULATION = $(patsubst ./src/%.c, ./objects/simulation/%.o, $(filter-out ./src/adsb_collector.c, $(C_SOURCE)))
 
-#Compiler
-CC = gcc
-CC_CROSS = arm-linux-gnueabihf-gcc
+# Compiler
+#CC = gcc
+CC_CROSS = arm-none-eabi-gcc
+CC = $(CC_CROSS)
 
-#Arquivo main
-MAIN = adsb_collector
-
-#Flags for compiler
+# Compiler flags
 CC_FLAGS = -c        \
            -W        \
            -Wall     \
-           -pedantic 
+           -pedantic
 
-#Library flags
-LDFLAGS = -lm -l sqlite3 -lrt
-#
-# Compilation  and linking
-#
+# Library flags
+# Incluindo librtlsdr
+LDFLAGS = -lm -l sqlite3 -lrt -lrtlsdr
 
-all:
-	$(CC) -o ./$(PROJ_NAME) $(C_SOURCE) $(LDFLAGS)
 
+# Directories for object files
+OBJ_DIR_COLLECTOR = objects/collector
+OBJ_DIR_SIMULATION = objects/simulation
+
+# Ensure the objects directories exist
+$(shell mkdir -p $(OBJ_DIR_COLLECTOR))
+$(shell mkdir -p $(OBJ_DIR_SIMULATION))
+
+# Default target: build both executables
+all: $(PROJ_COLLECTOR) $(PROJ_SIMULATION)
+
+# Rule to build the collector executable
+$(PROJ_COLLECTOR): $(OBJ_COLLECTOR)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+# Rule to build the simulation executable
+$(PROJ_SIMULATION): $(OBJ_SIMULATION)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+# Rule to compile collector object files
+$(OBJ_DIR_COLLECTOR)/%.o: ./src/%.c $(H_SOURCE)
+	$(CC) $(CC_FLAGS) -o $@ $<
+
+# Rule to compile simulation object files
+$(OBJ_DIR_SIMULATION)/%.o: ./src/%.c $(H_SOURCE)
+	$(CC) $(CC_FLAGS) -o $@ $<
+
+# Clean up
 clean:
-	rm -rf ./src/$(PROJ_NAME) $(PROJ_NAME) *~
+	rm -rf $(OBJ_DIR_COLLECTOR) $(OBJ_DIR_SIMULATION) $(PROJ_COLLECTOR) $(PROJ_SIMULATION) *~
