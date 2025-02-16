@@ -13,9 +13,9 @@ OBJ_COLLECTOR = $(patsubst ./src/%.c, ./objects/collector/%.o, $(filter-out ./sr
 OBJ_SIMULATION = $(patsubst ./src/%.c, ./objects/simulation/%.o, $(filter-out ./src/adsb_collector.c, $(C_SOURCE)))
 
 # Compiler
-#CC = gcc
+CC = gcc
 CC_CROSS = arm-none-eabi-gcc
-CC = $(CC_CROSS)
+#CC = $(CC_CROSS)
 
 # Compiler flags
 CC_FLAGS = -c        \

@@ -453,7 +453,26 @@ adsbMsg* decodeMessage(char* buffer, adsbMsg* messages, adsbMsg** nof){
 		printf("\n\n***********ADSB MESSAGE*************\n");
 		printf("MESSAGE:%s\n", buffer);
 
-//Catching ICAO
+		int tc = getTypecode(buffer);
+		printf("TYPECODE:%d\n", tc);
+
+		if(tc == 31){
+			printf("Debug: About to parse op status...\n");
+
+			// Find and create the node
+
+			adsbMsg *no = LIST_find(icao, messages);
+			if(no == NULL){
+				no = LIST_create(icao, &LastNode);
+			}
+			
+			parseOperationalStatus(buffer, no);
+
+			printf("TC=31 -> NACp=%d NACv=%d NIC=%d SIL=%d SDA=%d\n",
+                no->NACp, no->NACv, no->NIC, no->SIL, no->SDA);
+		}
+
+		//Catching ICAO
 		getICAO(buffer, icao);
 		
 		if(messages == NULL){
@@ -610,4 +629,70 @@ void clearMinimalInfo(adsbMsg *node){
 	node->Altitude = 0;
 	node->Latitude = 0;
 	node->Longitude = 0;
+}
+
+/*==============================================
+FUNCTION: parseOperationalStatus
+INPUT: a char vector and an adsbMsg pointer
+OUTPUT: an integer
+DESCRIPTION: this function receives the 28 bytes and
+extracts the operational status information from the
+data, saving it into the adsbMsg node.
+================================================*/
+
+int parseOperationalStatus(const char *hexMessage, adsbMsg *node){
+	char binMsg[113];
+
+	// Concert 28=hex ACSII to binary
+	hex2bin((char *)hexMessage, binMsg);
+	binMsg[112] = '\0';
+	printf("binary length = %zu\n", strlen(binMsg)); 
+
+	/* 
+       2) Extract bits. 
+       Example offsets: 
+         - NACp might be bits 56-59
+         - NACv might be bits 60-62
+         - NIC  might be bits 50-53
+         - SIL  might be bits 47-49
+         - SDA  might be bits 63-64
+       TOTALLY EXAMPLE: adjust to your actual doc 
+    */
+
+    // NACp (4 bits, e.g. bits 56..59)
+    char nacpBits[5];
+    strncpy(nacpBits, &binMsg[56], 4);
+    nacpBits[4] = '\0';
+    node->NACp = bin2int(nacpBits);
+
+    // NACv (3 bits, e.g. bits 60..62)
+    char nacvBits[4];
+    strncpy(nacvBits, &binMsg[60], 3);
+    nacvBits[3] = '\0';
+    node->NACv = bin2int(nacvBits);
+
+    // NIC (4 bits, e.g. bits 50..53, just an example)
+    char nicBits[5];
+    strncpy(nicBits, &binMsg[50], 4);
+    nicBits[4] = '\0';
+    node->NIC = bin2int(nicBits);
+
+    // SIL (2 or 4 bits, depending on version)
+    // For instance, 2 bits at bits 47..48
+    char silBits[3];
+    strncpy(silBits, &binMsg[47], 2);
+    silBits[2] = '\0';
+    node->SIL = bin2int(silBits);
+
+    // SDA (2 bits, e.g. bits 63..64)
+    char sdaBits[3];
+    strncpy(sdaBits, &binMsg[63], 2);
+    sdaBits[2] = '\0';
+    node->SDA = bin2int(sdaBits);
+
+    // 3) For debug:
+    printf("[parseOperationalStatus] NACp=%d NACv=%d NIC=%d SIL=%d SDA=%d\n",
+           node->NACp, node->NACv, node->NIC, node->SIL, node->SDA);
+
+    return 0; // or DECODING_OK
 }

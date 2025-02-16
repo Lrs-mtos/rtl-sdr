@@ -57,7 +57,14 @@ typedef struct msg{
 	char messageID[29];
 	char mensagemVEL[29];
 
+	// This field store quality parameters of the message
+	int NACp; 	//Navigation Accuracy Category for Position
+	int NACv; 	//Navigation Accuracy Category for Velocity
+	int NIC; 	//Navigation Integrity Category
+	int SIL; 	//Surveillance Integrity Level
+	int SDA; 	//System Design Assurance
 	struct msg *next;
+
 }adsbMsg;
 
 

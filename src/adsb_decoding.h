@@ -23,6 +23,7 @@ int getCPRLongitude(char *msgi);
 int getAirbornePosition(char *msgEVEN, char *msgODD, double timeE, double timeO, float *lat, float *lon);
 int getAltitude(char *msgi);
 void clearMinimalInfo(adsbMsg *node);
+int parseOperationalStatus(const char *hexMessage, adsbMsg *node);
 adsbMsg* isNodeComplete(adsbMsg *node);
 adsbMsg* setPosition(char *msg, adsbMsg *node);
 adsbMsg* decodeMessage(char* buffer, adsbMsg* messages, adsbMsg** nof);
