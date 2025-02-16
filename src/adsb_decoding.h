@@ -12,10 +12,15 @@ message.
 #define DECODING_OK 0
 
 
+/* bit offsets */
+#define SB_NIC_BIT_POS  40   // "NIC Supplement-B" is typically bit 40 in position msgs
+#define NACV_BIT_START  43   // NACv in velocity messages might be bits 43..45
+#define NACV_BIT_LEN    3
+
 typedef struct msg adsbMsg;
 
 int getCallsign(char *msgi, char *msgf);
-int getVelocities(char *msgi, float *speed, float *head, int *rateCD, char *tag);
+int getVelocities(char *msgi, adsbMsg *node, float *speed, float *head, int *rateCD, char *tag);
 int isPositionMessage(char *msgi);
 int getPositionType(char *msgi);
 int getCPRLatitude(char *msgi);
@@ -24,6 +29,13 @@ int getAirbornePosition(char *msgEVEN, char *msgODD, double timeE, double timeO,
 int getAltitude(char *msgi);
 void clearMinimalInfo(adsbMsg *node);
 int parseOperationalStatus(const char *hexMessage, adsbMsg *node);
+
+/* For a position (TC=9..18) message, read bit 40 => SB nic. Returns 0 or 1. */
+int getSBnicBit(const char* hexMessage);
+
+/* Use the table from the doc to derive NIC from (TC + SBnic). */
+int deriveNICfromTCandSBnic(int tc, int sbnic);
+
 adsbMsg* isNodeComplete(adsbMsg *node);
 adsbMsg* setPosition(char *msg, adsbMsg *node);
 adsbMsg* decodeMessage(char* buffer, adsbMsg* messages, adsbMsg** nof);

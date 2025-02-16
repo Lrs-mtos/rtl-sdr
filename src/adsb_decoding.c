@@ -79,92 +79,89 @@ the vertical velocity (stored into "rateCD"), the
 aircraft heading (stored into "head") and the kind
 of velocities calculated, GS or AS, stored into "tag".
 ================================================*/
-int getVelocities(char *msgi, float *speed, float *head, int *rateCD, char *tag){
+/* getVelocities(...) */
+int getVelocities(char *msgi, adsbMsg *node, float *speed, float *head, int *rateCD, char *tag){
+    if(getTypecode(msgi) != 19){
+        return DECODING_ERROR;
+    }
 
-	if(getTypecode(msgi)!= 19){ //Velocity messages have typecode equal to 19
-		//printf("It's not a Airbone Velocity Message\n");
-		return DECODING_ERROR;
-	}
+    char msgbin[113], msgAUX[113];
+    int subtype = 0;
+    int Vew_sign = 0, Vns_sign = 0;
+    int Vel_ew = 0, Vel_ns = 0;
+    int Vr_sign = 0, Vr = 0;
 
-	char msgbin[113], msgAUX[113];
-	int subtype = 0, Vew_sign = 0, 
-    Vns_sign = 0, Vel_ew = 0, 
-	Vel_ns = 0, Vr_sign = 0, Vr = 0;
+    /* Convert hex to binary, ensure null termination */
+    hex2bin(msgi, msgbin);
+    msgbin[112] = '\0';
 
-	hex2bin(msgi, msgbin);
+    /* Read subtype from bits [38..40] => e.g. &msgbin[37], length=3. */
+    strncpy(msgAUX, &msgbin[37], 3);
+    msgAUX[3] = '\0';
+    subtype = bin2int(msgAUX); // 1,2 => ground speed; 3,4 => air speed
 
-	strncpy(msgAUX,&msgbin[37],3);
-	msgAUX[3] = '\0';
+    /* ---------- NACv extraction inside getVelocities ---------- */
+    {
+        // Suppose NACv is bits 43..45
+        char nacvBits[4];
+        strncpy(nacvBits, &msgbin[43], 3);
+        nacvBits[3] = '\0';
+        int NACv_val = bin2int(nacvBits);
 
-	subtype = bin2int(msgAUX);			//It reads the velocity subtype
+        /* store NACv directly in adsbMsg node */
+        node->NACv = NACv_val;
+    }
 
-	if((subtype == 1)||(subtype == 2)){
+    /* ---------- existing speed/heading decode ---------- */
+    if ((subtype == 1)||(subtype == 2)) {
+        /* ground speed logic */
+        Vew_sign = msgbin[45] - '0';
+        strncpy(msgAUX, &msgbin[46], 10);
+        msgAUX[10] = '\0';
+        Vel_ew = bin2int(msgAUX) - 1;
 
-		Vew_sign = msgbin[45] - 48;			//It reads the East-West sign
+        Vns_sign = msgbin[56] - '0';
+        strncpy(msgAUX, &msgbin[57], 10);
+        msgAUX[10] = '\0';
+        Vel_ns = bin2int(msgAUX) - 1;
 
-		strncpy(msgAUX,&msgbin[46],10);		//It gets the velocity in East-West direction
-		msgAUX[10] = '\0';
+        if(Vew_sign) Vel_ew = -Vel_ew;
+        if(Vns_sign) Vel_ns = -Vel_ns;
 
-		Vel_ew = bin2int(msgAUX) - 1;
-	
-		Vns_sign = msgbin[56] - 48;			//It reads the North-South sign
+        *speed = sqrt(Vel_ew*Vel_ew + Vel_ns*Vel_ns);
+        *head  = atan2(Vel_ew, Vel_ns)*180.0/PI_MATH;
+        if(*head < 0) *head += 360;
+        strcpy(tag, "GS");
+        tag[2] = '\0';
+    }
+    else {
+        /* airspeed logic (subtype 3 or 4) */
+        strncpy(msgAUX, &msgbin[46], 10);
+        msgAUX[10] = '\0';
+        *head = (bin2int(msgAUX)/1024.0)*360.0;
 
-		strncpy(msgAUX,&msgbin[57],10);		//It gets the velocity in North-South direction
-		msgAUX[10] = '\0';
+        strncpy(msgAUX, &msgbin[57], 10);
+        msgAUX[10] = '\0';
+        *speed = bin2int(msgAUX);
 
-		Vel_ns = bin2int(msgAUX) - 1;
+        strcpy(tag, "AS");
+        tag[2] = '\0';
+    }
 
-		if(Vew_sign){ //Vew_sign can be 1 or 0
-			Vel_ew = -1*Vel_ew;
-		}
-		if(Vns_sign){ //Vns_sign can be 1 or 0
-			Vel_ns = -1*Vel_ns;				
-		}
+    /* ---------- existing vertical rate decode ---------- */
+    Vr_sign = msgbin[68] - '0';
+    strncpy(msgAUX, &msgbin[69], 9);
+    msgAUX[9] = '\0';
+    Vr = bin2int(msgAUX);
 
-		*speed = sqrt(Vel_ns*Vel_ns + Vel_ew*Vel_ew); //It gets the final horizontal velocity
+    *rateCD = (Vr - 1)*64;
+    if(Vr_sign) {
+        *rateCD = -*rateCD; // downward
+    }
 
-		*head = atan2(Vel_ew, Vel_ns);
-		*head = (*head)*180/PI_MATH;			//It gets the final heading, in degrees
-
-		if(*head < 0){
-			*head = *head + 360;
-		}
-
-		strcpy(tag,"GS");				//GroundSpeed.
-		tag[2] = '\0';
-
-	}else{
-		strncpy(msgAUX, &msgbin[46],10);
-		msgAUX[10]='\0';
-
-		*head = (bin2int(msgAUX)/1024.0)*360;
-
-		strncpy(msgAUX, &msgbin[57],10);
-		msgAUX[10]='\0';		
-
-		*speed = bin2int(msgAUX);
-
-		strcpy(tag,"AS");			//AirSpeed.
-		tag[2] = '\0';
-	}
-
-	Vr_sign = msgbin[68] - 48;			//It indicates the direction of the vertical velocity (UP/DOWN).
-
-	strncpy(msgAUX,&msgbin[69],9);		//It gets the vertical velocity (rate)
-	msgAUX[9] = '\0';
-
-	Vr = bin2int(msgAUX);
-
-	*rateCD = (Vr - 1)*64;				//It gets the final vertical velocity
-	
-	if(Vr_sign){
-		*rateCD = -1*(*rateCD);//-1*Vr;				//DOWN
-	}else{
-		*rateCD = *rateCD;//Vr;					//UP
-	}
-
-	return DECODING_OK;
+    return 0;
 }
+
 
 /*===========================
 Functions used in position
@@ -436,151 +433,148 @@ DESCRIPTION: this function receives the 28 bytes
 about the aircraft, extracts the information from 
 the data and save it into the list.
 ================================================*/
-adsbMsg* decodeMessage(char* buffer, adsbMsg* messages, adsbMsg** nof){
+adsbMsg* decodeMessage(char* buffer, adsbMsg* messages, adsbMsg** nof)
+{
+    char icao[7];
+    icao[0] = '\0';
 
-	char icao[7], tag[3];
-	icao[0] = '\0';
+    adsbMsg* no = NULL;
+    static adsbMsg* LastNode = NULL;
 
-	int rateV = 0, alt = 0;
-	float lat = 0.0, lon = 0.0,
-	heading = 0.0, vel_h = 0.0;
-	
-	adsbMsg* no = NULL;
-	static adsbMsg* LastNode = NULL;
+    if ((getDownlinkFormat(buffer) == 17) && (strlen(buffer) == 28)) {
+        printf("\n\n***********ADSB MESSAGE*************\n");
+        printf("MESSAGE:%s\n", buffer);
 
+        int tc = getTypecode(buffer);
+        printf("TYPECODE:%d\n", tc);
 
-	if((getDownlinkFormat(buffer) == 17) && (strlen(buffer) == 28)){ //It verifies if the message received is of ADS-B type
-		printf("\n\n***********ADSB MESSAGE*************\n");
-		printf("MESSAGE:%s\n", buffer);
+        // Extract ICAO so we can store data in the correct node.
+        getICAO(buffer, icao);
 
-		int tc = getTypecode(buffer);
-		printf("TYPECODE:%d\n", tc);
+        // Insert/find the node in the 'messages' list.
+        if (messages == NULL) {
+            messages = LIST_create(icao, &LastNode);
+            no = messages;
+        } else {
+            if ((no = LIST_insert(icao, messages, &LastNode)) == NULL) {
+                if ((no = LIST_find(icao, messages)) == NULL) {
+                    perror("ICAO not found");
+                    return messages;
+                }
+            }
+        }
 
-		if(tc == 31){
-			printf("Debug: About to parse op status...\n");
+        printf("\n-----------------------------------------------------------\n| ");
+        printf("ICAO:%s\n", no->ICAO);
+        printf("-----------------------------------------------------------\n");
 
-			// Find and create the node
-
-			adsbMsg *no = LIST_find(icao, messages);
-			if(no == NULL){
-				no = LIST_create(icao, &LastNode);
-			}
-			
-			parseOperationalStatus(buffer, no);
-
-			printf("TC=31 -> NACp=%d NACv=%d NIC=%d SIL=%d SDA=%d\n",
+        // If it's operational status (TC=31), parse NACp, NACv, NIC, SIL, SDA
+        if (tc == 31) {
+            printf("Debug: About to parse op status...\n");
+            parseOperationalStatus(buffer, no);
+            printf("TC=31 -> NACp=%d NACv=%d NIC=%d SIL=%d SDA=%d\n",
                 no->NACp, no->NACv, no->NIC, no->SIL, no->SDA);
-		}
+        }
 
-		//Catching ICAO
-		getICAO(buffer, icao);
+        // If callsign (TC=1..4)
+        if (tc >= 1 && tc <= 4) {
+            if (getCallsign(buffer, no->callsign) < 0) {
+                printf("ADS-B Decoding Error: callsign couldn't be decoded!\n");
+                LOG_add("decodeMessage", "callsign couldn't be decoded");
+                return NULL;
+            }
+            strcpy(no->messageID, buffer);
+            no->messageID[strlen(buffer)] = '\0';
+
+            printf("\n-------------------IDENTIFICATION----------------------------------------\n|");
+            printf(" CALLSIGN: %s\n", no->callsign);
+            printf("--------------------------------------------------------------------------\n");
+        }
+        // If it's an airborne position message (TC=9..18)
+        else if (isPositionMessage(buffer)) {
+            // e.g. your existing function
+            no = setPosition(buffer, no);
+
+            // Attempt partial NIC decode from SB nic bit
+            int sbnicVal = getSBnicBit(buffer);
+            int partialNIC = deriveNICfromTCandSBnic(tc, sbnicVal);
+            if (partialNIC >= 0) {
+                // Only overwrite no->NIC if we haven't gotten NIC from type31
+                // or if you want to always store partial
+                no->NIC = partialNIC;
+            }
+
+            // existing code: if we have even+odd, compute lat/lon, altitude
+            if ((strlen(no->oeMSG[0]) != 0) && (strlen(no->oeMSG[1]) != 0)) {
+                float lat=0.0, lon=0.0;
+                if (getAirbornePosition(no->oeMSG[0], no->oeMSG[1],
+                                        no->oeTimestamp[0], no->oeTimestamp[1],
+                                        &lat, &lon) < 0) {
+                    printf("ADS-B Decoding Error: position couldn't be decoded!\n");
+                    LOG_add("decodeMessage", "position couldn't be decoded");
+                    return NULL;
+                }
+                int alt = getAltitude(buffer);
+                if (alt < 0) {
+                    printf("ADS-B Decoding Error: altitude couldn't be decoded!\n");
+                    LOG_add("decodeMessage", "altitude couldn't be decoded");
+                    return NULL;
+                }
+                no->Longitude = lon;
+                no->Latitude  = lat;
+                no->Altitude  = alt;
+                
+                printf("\n-------------------POSICIONAMENTO--------------------------------------\n|");
+                printf("LAT: %f\n|LON: %f\n|ALT: %d\n", no->Latitude,no->Longitude,no->Altitude);
+                printf("------------------------------------------------------------------------\n");
+            }
+        }
+        // If velocity (TC=19), decode speed, heading, NACv
+		else if (tc == 19) {
+			float heading = 0.0, vel_h = 0.0;
+			int rateV = 0;
+			char tag[4];
+			tag[0] = '\0';
 		
-		if(messages == NULL){
-			messages = LIST_create(icao, &LastNode);	//If the list of messages is empty, we create the first node
-			no = messages;
-
-		}else{ //Essa parte do código precisa de uma atenção especial, porque pode estar falha
-			if((no = LIST_insert(icao, messages, &LastNode)) == NULL){ //It tries to insert a new node
-				if((no = LIST_find(icao, messages)) == NULL){
-					perror("ICAO not found");	
-					return messages;
-					
-				}					
-			}
-		}
-
-		printf("\n-----------------------------------------------------------\n| ");
-		printf("ICAO:%s\n", no->ICAO); 
-		printf("-----------------------------------------------------------\n");
-
-//Catching the Callsign
-		if((1 <= getTypecode(buffer)) && (getTypecode(buffer) <= 4)){
-			if(getCallsign(buffer, no->callsign) < 0){
-				printf("ADS-B Decoding Error: callsign couldn't be decoded!\n");
-				LOG_add("decodeMessage", "callsign couldn't be decoded");
-				
-				return NULL;
-			}
-			strcpy(no->messageID, buffer);
-			no->messageID[strlen(buffer)] = '\0';
-
-			printf("\n-------------------IDENTIFICATION----------------------------------------\n|");	
-			printf(" CALLSIGN: %s\n", no->callsign );	printf("\t\n");
-			printf("--------------------------------------------------------------------------\n");
-
-		}
-
-//Catching Latitude, Longitude and Altitude
-		else if(isPositionMessage(buffer)){
-
-			no = setPosition(buffer, no);
-			
-			if((strlen(no->oeMSG[0]) != 0) && (strlen(no->oeMSG[1]) != 0)){ //It verifies if there is both messages (even and odd)
-					if(getAirbornePosition(no->oeMSG[0], no->oeMSG[1], no->oeTimestamp[0], no->oeTimestamp[1], &lat, &lon) < 0){  //It gets the latitude and longitude
-						printf("ADS-B Decoding Error: position couldn't be decoded!\n");
-						LOG_add("decodeMessage", "position couldn't be decoded");
-
-						return NULL;
-					}
-
-					alt = getAltitude(buffer); //It gets the altitude
-					if(alt < 0){
-						printf("ADS-B Decoding Error: altitude couldn't be decoded!\n");
-						LOG_add("decodeMessage", "altitude couldn't be decoded");
-
-						return NULL;
-					}
-
-					no->Longitude = lon;
-					no->Latitude = lat;
-					no->Altitude = alt;
-					
-					printf("\n-------------------POSICIONAMENTO--------------------------------------\n|");
-					printf("LAT: %f\n|LON: %f\n|ALT: %d\n",no->Latitude,no->Longitude,no->Altitude); 
-					printf("------------------------------------------------------------------------\n");
-
-			}		
-		}
-//Catching the velocity
-		else if(getTypecode(buffer) == 19){
-		
-			if(getVelocities(buffer, &vel_h, &heading, &rateV, tag) < 0){
+			// Now pass 'no' so getVelocities can store NACv directly
+			if (getVelocities(buffer, no, &vel_h, &heading, &rateV, tag) < 0) {
 				printf("ADS-B Decoding Error: velocities couldn't be decoded!\n");
 				LOG_add("decodeMessage", "velocities couldn't be decoded");
-
 				return NULL;
 			}
-
 			no->horizontalVelocity = vel_h;
-			no->verticalVelocity = rateV;
+			no->verticalVelocity   = rateV;
 			no->groundTrackHeading = heading;
-
+		
 			strcpy(no->mensagemVEL, buffer);
 			no->mensagemVEL[strlen(buffer)] = '\0';
-
-			printf("-------------------------------------VELOCIDADE----------------------------------\n");
-			printf("|VELH: %f\n|HEAD: %f\n|RATEV: %d\n|TAG: %s\n",no->horizontalVelocity, no->groundTrackHeading, no->verticalVelocity,tag); 
-			printf("-------------------------------------------------------------------------------\n");
-
-		}
-	
-		//It reorders the messages list according with the update time
-		no->uptadeTime = getCurrentTime();
-		if((LastNode = LIST_orderByUpdate(no->ICAO, LastNode, &messages)) == NULL){
-			printf("It wasn't possible to sort the list\n");
-		}
 		
-	}else{
-		printf("\n\n###############No ADS-B Message#####################\n");
-		printf("|Message: %s\n", buffer);
-	}
+			// NACv is now in no->NACv (written inside getVelocities)
+			printf("-------------------------------------VELOCIDADE----------------------------------\n");
+			printf("|VELH: %f\n|HEAD: %f\n|RATEV: %d\n|TAG: %s\n",
+				   no->horizontalVelocity, no->groundTrackHeading, no->verticalVelocity, tag);
+			printf("|NACv: %d\n", no->NACv);
+			printf("-------------------------------------------------------------------------------\n");
+		}
+        // reorder the list
+        no->uptadeTime = getCurrentTime();
+        if ((LastNode = LIST_orderByUpdate(no->ICAO, LastNode, &messages)) == NULL) {
+            printf("It wasn't possible to sort the list\n");
+        }
 
-	memset(buffer, 0x0, 29);
+    } else {
+        printf("\n\n###############No ADS-B Message#####################\n");
+        printf("|Message: %s\n", buffer);
+    }
 
-	*nof = no;
+    // clear buffer
+    memset(buffer, 0, 29);
 
-	return messages;
+    // store pointer
+    *nof = no;
+    return messages;
 }
+
 
 /*==============================================
 FUNCTION: isNodeComplete
@@ -648,16 +642,13 @@ int parseOperationalStatus(const char *hexMessage, adsbMsg *node){
 	binMsg[112] = '\0';
 	printf("binary length = %zu\n", strlen(binMsg)); 
 
-	/* 
-       2) Extract bits. 
-       Example offsets: 
-         - NACp might be bits 56-59
-         - NACv might be bits 60-62
-         - NIC  might be bits 50-53
-         - SIL  might be bits 47-49
-         - SDA  might be bits 63-64
-       TOTALLY EXAMPLE: adjust to your actual doc 
-    */
+    // Example offsets for NACp, NACv, NIC, SIL, SDA. You must confirm from your doc:
+    // Let's pretend:
+    // NACp => bits [56..59]
+    // NACv => bits [60..62]
+    // NIC  => bits [50..53]
+    // SIL  => bits [47..49]
+    // SDA  => bits [63..64]
 
     // NACp (4 bits, e.g. bits 56..59)
     char nacpBits[5];
@@ -679,9 +670,9 @@ int parseOperationalStatus(const char *hexMessage, adsbMsg *node){
 
     // SIL (2 or 4 bits, depending on version)
     // For instance, 2 bits at bits 47..48
-    char silBits[3];
-    strncpy(silBits, &binMsg[47], 2);
-    silBits[2] = '\0';
+    char silBits[4];
+    strncpy(silBits, &binMsg[47], 3);
+    silBits[3] = '\0';
     node->SIL = bin2int(silBits);
 
     // SDA (2 bits, e.g. bits 63..64)
@@ -695,4 +686,57 @@ int parseOperationalStatus(const char *hexMessage, adsbMsg *node){
            node->NACp, node->NACv, node->NIC, node->SIL, node->SDA);
 
     return 0; // or DECODING_OK
+}
+
+/*==============================================
+FUNCTION: getSBnicBit
+INPUT: a char vector
+OUTPUT: an integer
+DESCRIPTION: this function receives the 28 bytes
+(or 112 bits) of ADS-B data and returns the value
+of the SB nic bit.
+===============================================*/
+int getSBnicBit(const char* hexMessage)
+{
+    char binMsg[113];
+    hex2bin((char *)hexMessage, binMsg);
+    binMsg[112] = '\0';
+
+    // single char from bit 40
+    char c = binMsg[SB_NIC_BIT_POS];
+    if (c == '1') return 1;
+    return 0; 
+}
+
+/*==============================================
+FUNCTION: deriveNICfromTCandSBnic
+INPUT: two integers
+OUTPUT: an integer
+DESCRIPTION: this function receives the type code
+and the SB nic bit and returns the NIC value.
+==============================================*/
+int deriveNICfromTCandSBnic(int tc, int sbnic)
+{
+    // Reference the big table from "ADS-B Decoding Guide" 5.1 
+    // or your own doc. We'll do a small subset here:
+
+    /*
+       from that doc snippet:
+       9  SB=0 => NIC=11
+       10 SB=0 => NIC=10
+       11 SB=1 => NIC=9
+       11 SB=0 => NIC=8
+       12 SB=0 => NIC=7
+       etc.
+    */
+    if (tc == 9 && sbnic == 0) return 11;
+    if (tc == 10 && sbnic == 0) return 10;
+    if (tc == 11 && sbnic == 1) return 9;
+    if (tc == 11 && sbnic == 0) return 8;
+    if (tc == 12 && sbnic == 0) return 7;
+    if (tc == 13 && sbnic == 1) return 6;
+    if (tc == 13 && sbnic == 0) return 5;
+    // ... and so on ...
+    // fallback
+    return -1; // means "not found" or unknown
 }

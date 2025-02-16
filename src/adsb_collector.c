@@ -4,6 +4,7 @@
 #include <string.h>
 #include <math.h>
 #include <rtl-sdr.h>
+#include "board_monitor.h"
 
 #define DEFAULT_FREQUENCY   1090000000 // 1090 MHz
 #define DEFAULT_SAMPLE_RATE 2000000    // 2 MS/s
@@ -62,6 +63,7 @@ int main() {
             // Process the samples
             process_samples(buffer, n_read);
         }
+        printCpuUsage();
     }
 
     rtlsdr_close(dev);

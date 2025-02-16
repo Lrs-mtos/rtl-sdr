@@ -19,17 +19,16 @@ int main() {
     // Cada mensagem tem 28 caracteres hexadecimais. Estas abaixo são apenas exemplos.
     // Idealmente, você usaria mensagens que sabe que decodificam algo.
     const char *testMessages[] = {
-        "8DABC123F8000011223344556677",
-        "8D40621D58C382D690C8AC2863A7",
-        "8B305678CA11029549568A9AC051",
-        "8F824A887D0A647AD30658469026",
-        "8D8982DA0FAA7A81D65154E03662",
+        "8DAE48413F8000011223344556677",
+        "8D111111081234FFFFFFFFFFFF1234", // Callsign TC = 1 
+        "8D111111181234FFFFFFFFFFFF1234", // Callsign TC = 3
+        "8D222222301234FFFFFFFFFFFF1234", // Callsign TC = 9 (airbone position)
+        "8D333333481234FFFFFFFFFFFF1234", // Callsign TC = 19 (velocity)
+        "8DABC123F8000011223344556677", // Operational status TC = 31
         "8C146819E6F0E65929939A005068",
-        "8DE484139940763488BC3EBA1207",
         "8DE48413587DE0BA732F28AADD2D",
-        "8DE48413587D40BD9F2F9818B12F",
+        /* "8DE48413587D40BD9F2F9818B12F",
         "8DE484139940743388683C329F0F",
-        "8DE48413587BF0BF512FD38459B8",
         "8DE4841399407333686C3C261DB3",
         "8DE48413587B80C185302045A811",
         "8DE48413587B74CFAD67C260B143",
@@ -226,7 +225,7 @@ int main() {
         "8DE48A6F9944BDB1003C3CAAB443",
         "8DE48A6F9944BDB120403C058671",
         "8DE49246587194A36770E92A9344",
-        "8DE4924699151AAC20583214C079",
+        "8DE4924699151AAC20583214C079", */
     };
     int numTestes = sizeof(testMessages) / sizeof(testMessages[0]);
 
@@ -292,6 +291,7 @@ int main() {
     LIST_removeAll(&messagesList);
 
     // Finaliza
+    printCpuUsage();
     printf("Encerrando simulador ADS-B.\n");
     return 0;
 }
