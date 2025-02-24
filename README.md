@@ -68,3 +68,191 @@ After the compiling, a file called **run_collector** will be generated. To run t
 sudo ./run_collector
 ```
 When running the system, two files will be generated: **radarlivre_v4.db**, which is the database file, and **adsb_log.log**, which is the log file.
+
+
+# **Guia de Instalação e Configuração do Prometheus + SQLite Exporter no Orange Pi**
+
+> **Autor:** Radarlivre  
+> **Dispositivo:** Orange Pi  
+> **IP Principal:** `192.168.0.8`  
+> **IP do Orange Pi:** `<IP_DA_ORANGE_PI>`  
+
+---
+
+## **1. Atualizando o Sistema**
+```sh
+sudo apt update && sudo apt upgrade -y
+```
+
+---
+
+## **2. Instalando Dependências**
+```sh
+sudo apt install -y git sqlite3 libsqlite3-dev build-essential cmake prometheus prometheus-node-exporter
+```
+
+---
+
+## **3. Criando o Script do SQLite Exporter**
+Crie o script que coleta métricas do banco de dados e envia para o Prometheus.
+
+```sh
+nano /home/orangepi/sqlite_exporter.sh
+```
+**📄 Conteúdo do script (`sqlite_exporter.sh`):**
+```sh
+#!/bin/bash
+DB_PATH="/home/orangepi/radarlivre_v4.db"
+
+# Total de mensagens no banco
+TOTAL_REGISTROS=$(sqlite3 $DB_PATH "SELECT COUNT(*) FROM radarlivre_api_adsbinfo;")
+
+# Média de altitude das aeronaves
+MEDIA_ALTITUDE=$(sqlite3 $DB_PATH "SELECT AVG(altitude) FROM radarlivre_api_adsbinfo;")
+
+# Velocidade média horizontal das aeronaves
+MEDIA_VELOCIDADE=$(sqlite3 $DB_PATH "SELECT AVG(horizontalVelocity) FROM radarlivre_api_adsbinfo;")
+
+# Quantidade de aeronaves distintas
+AERONAVES_DISTINTAS=$(sqlite3 $DB_PATH "SELECT COUNT(DISTINCT modeSCode) FROM radarlivre_api_adsbinfo;")
+
+# Dados da CPU (quando implementado)
+CPU_USAGE=$(cat /proc/loadavg | awk '{print $1}')
+
+# Formata saída para Prometheus
+echo "# HELP adsb_total_messages Número total de mensagens ADS-B coletadas"
+echo "# TYPE adsb_total_messages counter"
+echo "adsb_total_messages $TOTAL_REGISTROS"
+
+echo "# HELP adsb_average_altitude Altitude média das aeronaves"
+echo "# TYPE adsb_average_altitude gauge"
+echo "adsb_average_altitude $MEDIA_ALTITUDE"
+
+echo "# HELP adsb_average_speed Velocidade média horizontal das aeronaves"
+echo "# TYPE adsb_average_speed gauge"
+echo "adsb_average_speed $MEDIA_VELOCIDADE"
+
+echo "# HELP adsb_unique_aircraft Número de aeronaves únicas"
+echo "# TYPE adsb_unique_aircraft gauge"
+echo "adsb_unique_aircraft $AERONAVES_DISTINTAS"
+
+echo "# HELP system_cpu_usage Uso médio da CPU"
+echo "# TYPE system_cpu_usage gauge"
+echo "system_cpu_usage $CPU_USAGE"
+```
+**Salvar e sair** (`CTRL + X`, `Y`, `Enter`)
+
+**Dar permissão de execução:**
+```sh
+chmod +x /home/orangepi/sqlite_exporter.sh
+```
+
+---
+
+## **4. Configurando o Prometheus**
+Edite o arquivo de configuração do **Prometheus**:
+```sh
+sudo nano /etc/prometheus/prometheus.yml
+```
+**Conteúdo do arquivo (`prometheus.yml`):**
+```yaml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Prometheus local (no Orange Pi)
+  - job_name: 'prometheus_orangepi'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # SQLite Exporter do Orange Pi
+  - job_name: 'sqlite_exporter'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['localhost:9100']
+
+  # Node Exporter do Orange Pi (para métricas de sistema)
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['localhost:9101']
+
+# Enviando dados para o Prometheus principal (192.168.0.8)
+remote_write:
+  - url: "http://192.168.0.8:9090/api/v1/write"
+remote_read:
+  - url: "http://192.168.0.8:9090/api/v1/read"
+```
+**Salvar e sair** (`CTRL + X`, `Y`, `Enter`)
+
+**Reiniciar o Prometheus:**
+```sh
+sudo systemctl restart prometheus
+```
+
+---
+
+## **5. Criando o Serviço `sqlite_exporter`**
+Agora, vamos criar um serviço para rodar o `sqlite_exporter.sh` automaticamente.
+
+```sh
+sudo nano /etc/systemd/system/sqlite_exporter.service
+```
+**Conteúdo do arquivo (`sqlite_exporter.service`):**
+```ini
+[Unit]
+Description=SQLite Exporter para Prometheus
+After=network.target
+
+[Service]
+ExecStart=/bin/bash /home/orangepi/sqlite_exporter.sh
+Restart=always
+User=orangepi
+
+[Install]
+WantedBy=multi-user.target
+```
+**Salvar e sair** (`CTRL + X`, `Y`, `Enter`)
+
+**Ativar e iniciar o serviço:**
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable sqlite_exporter
+sudo systemctl start sqlite_exporter
+```
+
+---
+
+## **6. Instalando o Grafana**
+```sh
+echo "deb https://packages.grafana.com/oss/deb stable main" | sudo tee -a /etc/apt/sources.list.d/grafana.list
+sudo apt install -y software-properties-common
+sudo wget -q -O - https://packages.grafana.com/gpg.key | sudo apt-key add -
+sudo apt update
+sudo apt install -y grafana
+```
+**Iniciar e ativar o Grafana:**
+```sh
+sudo systemctl enable --now grafana-server
+sudo systemctl status grafana-server
+```
+
+---
+
+## **7. Acessar o Grafana**
+1. **Abra o navegador e acesse:**  
+   ```
+   http://<IP_DA_ORANGE_PI>:3000
+   ```
+2. **Login padrão:**  
+   ```
+   Usuário: admin
+   Senha: radarlivre
+   ```
+3. **Configurar a fonte de dados:**  
+   - **Configuration > Data Sources > Add Data Source**
+   - Escolha **Prometheus**
+   - **URL:** `http://192.168.0.8:9090`
+   - **Save & Test**
+
+Agora, **o Grafana no Orange Pi está enviando métricas para o Prometheus principal!** 
