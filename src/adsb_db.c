@@ -6,6 +6,7 @@
 #include "adsb_time.h"
 #include "adsb_db.h"
 #include "adsb_createLog.h"
+#include "board_monitor.h"
 
 #define DATABASE_ERROR -1
 #define DATABASE "radarlivre_v4.db"
@@ -195,4 +196,49 @@ int DB_saveData(adsbMsg *msg){
     if(status1!=0) return status1;
     if(status2!=0) return status2;
     return 0; 
+}
+
+/*==============================================
+FUNCTION: DB_saveSystemMetrics
+INPUT: double user_cpu, double sys_cpu, long max_rss
+OUTPUT: int status
+DESCRIPTION: saves system metrics into system_metrics
+================================================*/
+int DB_saveSystemMetrics(double user_cpu, double sys_cpu, long max_rss) {
+    sqlite3 *db_handler = NULL;
+    char *sqlText = NULL, *errmsg = NULL;
+    int status = -1;
+    // Use a mesma constante DATABASE definida nos seus arquivos
+    sqlite3_initialize();
+    db_handler = DB_open(DATABASE);
+    if (!db_handler) {
+        sqlite3_shutdown();
+        return DATABASE_ERROR;
+    }
+    // Obtenha um timestamp (pode usar getCurrentTime se retornar double)
+    long timestamp = (long)getCurrentTime();
+    
+    sqlText = sqlite3_mprintf(
+        "INSERT INTO system_metrics(timestamp, user_cpu, sys_cpu, max_rss) "
+        "VALUES(%ld, %lf, %lf, %ld);",
+        timestamp, user_cpu, sys_cpu, max_rss
+    );
+    if (!sqlText) {
+        printf("Query for system metrics couldn't be created!\n");
+        LOG_add("DB_saveSystemMetrics", "query couldn't be created");
+        DB_close(&db_handler, &errmsg, &sqlText);
+        sqlite3_shutdown();
+        return DATABASE_ERROR;
+    }
+    status = sqlite3_exec(db_handler, sqlText, NULL, NULL, &errmsg);
+    if (status == SQLITE_OK) {
+        printf("System metrics saved successfully!\n");
+        LOG_add("DB_saveSystemMetrics", "System metrics saved successfully");
+    } else {
+        printf("System metrics couldn't be saved: %s\n", errmsg ? errmsg : "Unknown Error");
+        LOG_add("DB_saveSystemMetrics", "System metrics couldn't be saved");
+    }
+    DB_close(&db_handler, &errmsg, &sqlText);
+    sqlite3_shutdown();
+    return status;
 }

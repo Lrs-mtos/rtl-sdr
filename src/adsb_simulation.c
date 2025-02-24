@@ -9,6 +9,7 @@
 #include "adsb_decoding.h"
 #include "adsb_createLog.h"
 #include "adsb_db.h"
+#include "board_monitor.h"
 
 // Global pointer to the ADS-B messages list
 adsbMsg *messagesList = NULL;
@@ -266,6 +267,10 @@ int main(void) {
             if (isNodeComplete(node) != NULL) {
                 LOG_add("adsb_simulation", "Node is complete, calling DB_saveData");
                 int ret = DB_saveData(node);
+                double user_cpu, sys_cpu;
+                long max_rss;
+                getCpuUsage(&user_cpu, &sys_cpu, &max_rss);
+                DB_saveSystemMetrics(user_cpu, sys_cpu, max_rss);
                 if (ret != 0) {
                     printf(">> Falha ao salvar informações para %s.\n", node->ICAO);
                 } else {

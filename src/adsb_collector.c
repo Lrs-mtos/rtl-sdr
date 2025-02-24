@@ -6,6 +6,8 @@
 #include <signal.h>
 #include <unistd.h>
 #include <rtl-sdr.h>
+#include <sys/resource.h>
+#include <sys/time.h>
 
 // Project headers
 #include "adsb_decoding.h"   // decodeMessage(...)
@@ -14,6 +16,7 @@
 #include "adsb_time.h"
 #include "adsb_createLog.h"
 #include "adsb_db.h"         // DB_saveData(...)
+#include "board_monitor.h"   // board_monitor_init(...)
 
 // Configuration defines
 #define DEFAULT_FREQUENCY      1090000000 // 1090 MHz
@@ -258,6 +261,10 @@ static void decode_and_save_adsb(uint8_t *bits)
         adsbMsg *completeNode = isNodeComplete(node);
         if (completeNode) {
             int ret = DB_saveData(completeNode);
+            double user_cpu, sys_cpu;
+            long max_rss;
+            getCpuUsage(&user_cpu, &sys_cpu, &max_rss);
+            DB_saveSystemMetrics(user_cpu, sys_cpu, max_rss);
             if (ret != 0) {
                 printf("Failed to save data for %s.\n", completeNode->ICAO);
             } else {
