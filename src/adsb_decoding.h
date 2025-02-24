@@ -29,6 +29,7 @@ int getAirbornePosition(char *msgEVEN, char *msgODD, double timeE, double timeO,
 int getAltitude(char *msgi);
 void clearMinimalInfo(adsbMsg *node);
 int parseOperationalStatus(const char *hexMessage, adsbMsg *node);
+int estimateNACpFromNIC(int nic);
 
 /* For a position (TC=9..18) message, read bit 40 => SB nic. Returns 0 or 1. */
 int getSBnicBit(const char* hexMessage);

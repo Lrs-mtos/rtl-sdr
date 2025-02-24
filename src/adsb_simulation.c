@@ -2,103 +2,117 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Inclusões dos headers do seu projeto.
+// Project headers (ensure these headers define the functions and the adsbMsg struct)
 #include "adsb_auxiliars.h"
 #include "adsb_lists.h"
 #include "adsb_time.h"
 #include "adsb_decoding.h"
 #include "adsb_createLog.h"
-// Se você estiver usando o banco de dados, inclua também:
-// #include "adsb_db.h"
+#include "adsb_db.h"
 
-// Variável global para armazenar a lista de mensagens (como no collector).
+// Global pointer to the ADS-B messages list
 adsbMsg *messagesList = NULL;
 
-int main() {
-    // Para fins de teste, crie um pequeno conjunto de mensagens ADS-B válidas ou quase válidas.
-    // Cada mensagem tem 28 caracteres hexadecimais. Estas abaixo são apenas exemplos.
-    // Idealmente, você usaria mensagens que sabe que decodificam algo.
+/*==============================================
+FUNCTION: main
+INPUT: none
+OUTPUT: integer exit status
+DESCRIPTION: This simulation program feeds a set of test ADS-B 
+messages (28-hex strings) to the decoder. For each message, it
+calls decodeMessage() to update the message list. If a node is
+complete (has both position messages and altitude), it saves the 
+data to the database using DB_saveData(). It also logs events.
+================================================*/
+int main(void) {
+    // Array of test messages (28-character hex strings)
     const char *testMessages[] = {
+        "8DE491A1F82CC371C32CE0576098"
+        "8D4840D62F800000000000F9E71C",
+        "8D406D5A2F800000000000F9E71C",
+        "8D7580412F800000000000F9E71C",
+        "8D3921452F800000000000F9E71C",
+        "8D1234562F800000000000F9E71C",
+
         "8DAE48413F8000011223344556677",
-        "8D111111081234FFFFFFFFFFFF1234", // Callsign TC = 1 
-        "8D111111181234FFFFFFFFFFFF1234", // Callsign TC = 3
-        "8D222222301234FFFFFFFFFFFF1234", // Callsign TC = 9 (airbone position)
-        "8D333333481234FFFFFFFFFFFF1234", // Callsign TC = 19 (velocity)
-        "8DABC123F8000011223344556677", // Operational status TC = 31
-        "8C146819E6F0E65929939A005068",
-        "8DE48413587DE0BA732F28AADD2D",
-        /* "8DE48413587D40BD9F2F9818B12F",
-        "8DE484139940743388683C329F0F",
-        "8DE4841399407333686C3C261DB3",
-        "8DE48413587B80C185302045A811",
-        "8DE48413587B74CFAD67C260B143",
-        "8DE48413587B64CFEF67CB3EC916",
-        "8DE48413587B54D02F67D43CA55A",
-        "8DE48413201CC3F1D72DA0C33D4C",
-        "8DE4841399407232E8703BB3BCA7",
-        "8DE4841399407132A8743CFBBD83",
-        "8DE48413587B14D173680085B509",
-        "8DE4841399407132A8783B4C37A7",
+        "8D1111110F8234FFFFFFFFFFFF1234", // Callsign TC = 1 
+        "8D1111111F8234FFFFFFFFFFFF1234", // Callsign TC = 3
+        "8D2222223F8234FFFFFFFFFFFF1234", // Callsign TC = 9 (airbone position)
+        "8D3333334F8234FFFFFFFFFFFF1234", // Callsign TC = 19 (velocity)
+        "8DABC123FF800011223344556677", // Operational status TC = 31
+        "8C146819EF80E65929939A005068",
+        "8DE484135F8DE0BA732F28AADD2D",
+        "8DE484135F8D40BD9F2F9818B12F",
+        "8DE484139F80743388683C329F0F",
+        "8DE484139F807333686C3C261DB3",
+        "8DE484135F8B80C185302045A811",
+        "8DE484135F8B74CFAD67C260B143",
+        "8DE484135F8B64CFEF67CB3EC916",
+        "8DE484135F8B54D02F67D43CA55A",
+        "8DE484132F8CC3F1D72DA0C33D4C",
+        "8DE484139F807232E8703BB3BCA7",
+        "8DE484139F807132A8743CFBBD83",
+        "8DE484135F8B14D173680085B509",
+        "8DE484139F807132A8783B4C37A7",
         "8DE484135879E0C45930829562EB",
-        "8DE4841399407132887C3B317D8E",
-        "8DE484135879D4D275682386FA7C",
-        "8DE48413587984D3B5684EC21A33",
-        "8DE484135877F0C8293107260A01",
-        "8DE4841399406F31E884398B4E10",
-        "8DE484135877D0C8C9311D625FB8",
-        "8DE48413586F10D7F7332F2A2231",
-        "8DE48413201CC3F1D72DA0C33D4C",
-        "8DE48A6F203CE176CB7C60A6876E",
-        "8DE48A6F9940653A08B445D67A42",
-        "8DE48A6F5885D0B5B134366E97D7",
-        "8DE48A6F9940653A08B444298E4B",
-        "8DE48A6F99406539A8B44305211E",
-        "8DE48A6F203CE176CB7C60A6876E",
-        "8DE48A6F5883C0B95734999F06F5",
-        "8DE48A6F5883B4C7AD6C27FF6C62",
-        "8DE48A6F9940643948B442DC5F0F",
-        "8DE48A6F9940643948B442DC5F0F",
-        "8DE48A6F588320BB3B34CD84A9E3",
-        "8DE48A6F588314C9876C598E373A",
+        "8DE484139F807132887C3B317D8E",
+        "8DE484135F89D4D275682386FA7C",
+        "8DE484135F8984D3B5684EC21A33",
+        "8DE484135F87F0C8293107260A01",
+        "8DE484139F806F31E884398B4E10",
+        "8DE484135F87D0C8C9311D625FB8",
+        "8DE484135F8F10D7F7332F2A2231",
+        "8DE484132F8CC3F1D72DA0C33D4C",
+        "8DE48A6F2F8CE176CB7C60A6876E",
+        "8DE48A6F9F80653A08B445D67A42",
+        "8DE48A6F5F85D0B5B134366E97D7",
+        "8DE48A6F9F80653A08B444298E4B",
+        "8DE48A6F9F806539A8B44305211E",
+        "8DE48A6F2F8CE176CB7C60A6876E",
+        "8DE48A6F5F83C0B95734999F06F5",
+        "8DE48A6F5F83B4C7AD6C27FF6C62",
+        "8DE48A6F9F80643948B442DC5F0F",
+        "8DE48A6F9F80643948B442DC5F0F",
+        "8DE48A6F5F8320BB3B34CD84A9E3",
+        "8DE48A6F5F8314C9876C598E373A",
         "8DE48A6F99406338E8B443AE1ABB",
-        "8DE48A6F588194CB056C82BCB791",
-        "8DE48A6F588140BE41351FDB4D93",
-        "8DE48A6F99406338A8B8436CB8E9",
-        "8DE48A6F588120BE893526885C29",
-        "8DE48A6F588114CCC96CB22DF8BA",
-        "8DE48A6F99406338A8B44324E2E9",
-        "8DE48A6F587FF4CD116CB9B4BF8F",
-        "8DE48A6F99406338A8B8416CA4F2",
-        "8DE48A6F587FD4CD7D6CC5417B6A",
-        "8DE48A6F587FC0C00B354F8288F4",
-        "8DE48A6F587F84CE8B6CE11AA739",
-        "8DE48A6F9940623868B840F0A6CA",
-        "8DE48A6F9940623868B440B8FCCA",
-        "8DE48A6F587F54CF3D6CF4183FF6",
-        "8DE48A6F9940623848B840B5DAE3",
+        "8DE48A6F5F8194CB056C82BCB791",
+        "8DE48A6F5F8140BE41351FDB4D93",
+        "8DE48A6F9F806338A8B8436CB8E9",
+        "8DE48A6F5F8120BE893526885C29",
+        "8DE48A6F5F8114CCC96CB22DF8BA",
+        "8DE48A6F9F806338A8B44324E2E9",
+        "8DE48A6F5F8FF4CD116CB9B4BF8F",
+        "8DE48A6F9F806338A8B8416CA4F2",
+        "8DE48A6F5F8FD4CD7D6CC5417B6A",
+        "8DE48A6F5F8FC0C00B354F8288F4",
+        "8DE48A6F5F8F84CE8B6CE11AA739",
+        "8DE48A6F9F80623868B840F0A6CA",
+        "8DE48A6F9F80623868B440B8FCCA",
+        "8DE48A6F5F8F54CF3D6CF4183FF6",
+        "8DE48A6F9F80623848B840B5DAE3",
         "8DE48A6F587F30C1D3357F929B81",
         "8DE48A6F9940623828B8407A5E98",
-        "8DE48A6F9940623828B83F875CD8",
-        "8DE48A6F587F14D0036D0938DFD9",
-        "8DE48A6F9940623828B43FCF06D8",
-        "8DE48A6F587DA4C1796D314B676B",
-        "8DE48A6F203CE176CB7C60A6876E",
+        "8DE48A6F9F80623828B83F875CD8",
+        "8DE48A6F5F8F14D0036D0938DFD9",
+        "8DE48A6F9F80623828B43FCF06D8",
+        "8DE48A6F5F8DA4C1796D314B676B",
+        "8DE48A6F2F8CE176CB7C60A6876E",
         "8DE48A6F587D80C40735BBA619E7",
-        "8DE48A6F587D70C44F35C3A94470",
-        "8DE48A6F99406137E8B440240B1D",
-        "8DE48A6F99406137E8B440240B1D",
-        "8DE48A6F99406137C8B040594134",
-        "8DE48A6F587D14D2DD6D5679BDC3",
-        "8DE48A6F587D00C56F35E1555E01",
-        "8DE48A6F587BE4D38F6D6937C8AE",
-        "8DE48A6F99406137A8B43F53F10F",
-        "8DE48A6F587BC0C62335F48396B3",
-        "8DE48A6F587BB4D4516D7DE91EF8",
-        "8DE48A6F9940613788B03F2EBB26",
-        "8DE48A6F587B94D4996D8583CD6B",
-        "8DE48A6F9940613768B03F0B3BF0",
-        "8DE48A6F203CE176CB7C60A6876E",
-        "8DE48A6F587B64D5496D980301F5",
+        "8DE48A6F5F8D70C44F35C3A94470",
+        "8DE48A6F9F806137E8B440240B1D",
+        "8DE48A6F9F806137E8B440240B1D",
+        "8DE48A6F9F806137C8B040594134",
+        "8DE48A6F5F8D14D2DD6D5679BDC3",
+        "8DE48A6F5F8D00C56F35E1555E01",
+        "8DE48A6F5F8BE4D38F6D6937C8AE",
+        "8DE48A6F9F806137A8B43F53F10F",
+        "8DE48A6F5F8BC0C62335F48396B3",
+        "8DE48A6F5F8BB4D4516D7DE91EF8",
+        "8DE48A6F9F80613788B03F2EBB26",
+        "8DE48A6F5F8B94D4996D8583CD6B",
+        "8DE48A6F9F80613768B03F0B3BF0",
+        "8DE48A6F2F8CE176CB7C60A6876E",
+        "8DE48A6F5F8B64D5496D980301F5",
         "8DE48A6F9940603768B03F08313E",
         "8DE48A6F9940603748B03EB2B91E",
         "8DE48A6F587B40C7E53624888E68",
@@ -128,27 +142,27 @@ int main() {
         "8DE48A6F203CE176CB7C60A6876E",
         "8DE48A6F99406237C8AC3909FA0B",
         "8DE48A6F587104E6A16F6F0D569F",
-        "8DE48A6F99406237C8AC3909FA0B",
-        "8DE48A6F586FE0D9893803CE0A20",
-        "8DE48A6F99406237C8AC3909FA0B",
-        "8DE48A6F99406137A8AC39C36122",
-        "8DE48A6F586F90DA85381E87E4F2",
+        "8DE48A6F9F806237C8AC3909FA0B",
+        "8DE48A6F5F8FE0D9893803CE0A20",
+        "8DE48A6F9F806237C8AC3909FA0B",
+        "8DE48A6F9F806137A8AC39C36122",
+        "8DE48A6F5F8F90DA85381E87E4F2",
         "8DE48A6F9940613788AC39861D0B",
-        "8DE48A6F586F80DB03382BA4A53D",
-        "8DE485019940693348943E09BECB",
-        "8DE48501589370B58F3270E7F6CD",
-        "8DE485019940613328903D41E4A2",
-        "8DE485015881F0B75D32A5829E65",
-        "8DE485015881B0B84532C07DA93A",
-        "8DE485019940613308943B3C8AA6",
-        "8DE4850199406132E8903CF51107",
-        "8DE4850199406132C8903B4FBD0A",
-        "8DE48501588110BA7533015CDD45",
-        "8DE48501588104C8BB6A95307F35",
-        "8DE4850199406132C8903B4FBD0A",
-        "8DE48501587FF0BB193314804379",
-        "8DE4850199406132A8903A7FCD78",
-        "8DE4850199406132A8903A7FCD78",
+        "8DE48A6F5F8F80DB03382BA4A53D",
+        "8DE485019F80693348943E09BECB",
+        "8DE485015F8370B58F3270E7F6CD",
+        "8DE485019F80613328903D41E4A2",
+        "8DE485015F81F0B75D32A5829E65",
+        "8DE485015F81B0B84532C07DA93A",
+        "8DE485019F80613308943B3C8AA6",
+        "8DE485019F806132E8903CF51107",
+        "8DE485019F806132C8903B4FBD0A",
+        "8DE485015F8110BA7533015CDD45",
+        "8DE485015F8104C8BB6A95307F35",
+        "8DE485019F806132C8903B4FBD0A",
+        "8DE485015F8FF0BB193314804379",
+        "8DE485019F806132A8903A7FCD78",
+        "8DE485019F806132A8903A7FCD78",
         "8DE48501587F90BC61333A8DAC12",
         "8DE48501201CF332C78C20347B3D",
         "8DE48501587F84CA9F6ACD2B69D5",
@@ -180,27 +194,27 @@ int main() {
         "8DE491A1587D44D3C9660023C872",
         "8DE491A19914313948B83A52FEF7",
         "8DE491A1587D24D42965FB9E7A6B",
-        "8DE491A19914313968B83A1782DE",
-        "8DE491A1587994D90165BA6DD3DE",
-        "8DE491A199143239E8C03A2AE13A",
-        "8DE491A1587974D96365B59F2626",
-        "8DE491A1587950CC272E1093C561",
+        "8DE491A19F84313968B83A1782DE",
+        "8DE491A15F8994D90165BA6DD3DE",
+        "8DE491A19F843239E8C03A2AE13A",
+        "8DE491A15F8974D96365B59F2626",
+        "8DE491A15F8950CC272E1093C561",
         "8DE491A199143239E8BC3AC0AF21",
-        "8DE491A199143239E8BC3CC08B0C",
-        "8DE491A1587910CC472E0D61AE11",
-        "8DE491A199143239E8BC3B3F5B28",
-        "8DE491A15877F0CCCF2E06ABC140",
-        "8DE491A199143239E8BC3B3F5B28",
-        "8DE491A120501373E39C603B0D55",
-        "8DE491A15877D0CD472E0065E75B",
-        "8DE491A199143239E8BC3B3F5B28",
-        "8DE491A199143239C8BC3B7A2701",
-        "8DE491A15877A4DB8F659955821A",
-        "8DE491A199143239C8B83ABDE508",
-        "8DE491A1587750CF0D2DE95FAAD9",
-        "8DE491A199143239C8B839420D1A",
-        "8DE491A1587730CF712DE448CFAD",
-        "8DE491A199143139A8A438DFE03A",
+        "8DE491A19F843239E8BC3CC08B0C",
+        "8DE491A15F8910CC472E0D61AE11",
+        "8DE491A19F843239E8BC3B3F5B28",
+        "8DE491A15F87F0CCCF2E06ABC140",
+        "8DE491A19F843239E8BC3B3F5B28",
+        "8DE491A12F801373E39C603B0D55",
+        "8DE491A15F87D0CD472E0065E75B",
+        "8DE491A19F843239E8BC3B3F5B28",
+        "8DE491A19F843239C8BC3B7A2701",
+        "8DE491A15F87A4DB8F659955821A",
+        "8DE491A19F843239C8B83ABDE508",
+        "8DE491A15F8750CF0D2DE95FAAD9",
+        "8DE491A19F843239C8B839420D1A",
+        "8DE491A15F8730CF712DE448CFAD",
+        "8DE491A19F843139A8A438DFE03A",
         "8DE491A15875E4DE31657533EAF8",
         "8DE491A15875C4DE936571E65B08",
         "8DE491A15875A0D1552DCB7CDCEC",
@@ -225,73 +239,63 @@ int main() {
         "8DE48A6F9944BDB1003C3CAAB443",
         "8DE48A6F9944BDB120403C058671",
         "8DE49246587194A36770E92A9344",
-        "8DE4924699151AAC20583214C079", */
     };
-    int numTestes = sizeof(testMessages) / sizeof(testMessages[0]);
+    int numTests = sizeof(testMessages) / sizeof(testMessages[0]);
 
-    // Vamos usar para armazenar a mensagem decodificada.
-    char buffer[29]; 
+    char buffer[29];
     buffer[28] = '\0';
-
-    // Ponteiro para o nó retornado pela decodeMessage.
     adsbMsg *node = NULL;
 
-    // Inicia logs (se quiser usar)
+    // Log simulation start
     LOG_add("adsb_simulation", "Iniciando simulação de ADS-B...");
 
-    // Loop para enviar as mensagens de teste ao decoder
-    for(int i = 0; i < numTestes; i++){
-        // Copia a mensagem de teste para buffer (simulando “chegada” de 28 bytes hex)
+    // Loop through test messages
+    for (int i = 0; i < numTests; i++) {
+        // Copy test message into buffer (simulate receiving 28 hex characters)
         strncpy(buffer, testMessages[i], 28);
         buffer[28] = '\0';
 
-        printf("\n=== Teste %d: Mensagem = %s ===\n", i+1, buffer);
+        printf("\n=== Teste %d: Mensagem = %s ===\n", i + 1, buffer);
 
-        // Chama decodeMessage. Note que não estamos fazendo checagem de CRC aqui.
-        // Se quiser, pode usar a função CRC_tryMsg() antes, igual no collector.
+        // Call decodeMessage to update the messages list.
         messagesList = decodeMessage(buffer, messagesList, &node);
+        if (node != NULL) {
+            LOG_add("adsb_simulation", "Successfully decoded a message (node != NULL)");
 
-        // Se conseguiu decodificar e retornou um `node` não-nulo:
-        if(node != NULL) {
-            // Verifica se as infos mínimas estão completas (posição, altitude, etc)
-            if(isNodeComplete(node) != NULL) {
-                // Aqui, apenas imprimimos. Se quisesse salvar no banco, chamaria DB_saveData(node).
-                printf(">> Informações completas da aeronave %s:\n", node->ICAO);
-                printf("   Callsign: %s\n", node->callsign);
-                printf("   Latitude: %f\n", node->Latitude);
-                printf("   Longitude: %f\n", node->Longitude);
-                printf("   Altitude: %d ft\n", node->Altitude);
-                printf("   Vel. Horizontal: %f nós (ou m/s, depende)\n", node->horizontalVelocity);
-                printf("   Heading: %f graus\n", node->groundTrackHeading);
-
-                // Se quiser “limpar” para não reutilizar dados antigos, use:
-                clearMinimalInfo(node);
+            // Check if the node is complete (e.g., has both position messages and altitude > 0)
+            if (isNodeComplete(node) != NULL) {
+                LOG_add("adsb_simulation", "Node is complete, calling DB_saveData");
+                int ret = DB_saveData(node);
+                if (ret != 0) {
+                    printf(">> Falha ao salvar informações para %s.\n", node->ICAO);
+                } else {
+                    printf(">> Informações completas da aeronave %s salvas com sucesso!\n", node->ICAO);
+                    // Clear minimal info to avoid reusing stale data
+                    clearMinimalInfo(node);
+                }
             } else {
                 printf(">> Informações ainda não completas para %s.\n", node->ICAO);
             }
         } else {
             printf(">> decodeMessage não retornou nó válido.\n");
         }
-
-        // Limpa o buffer para o próximo teste
         memset(buffer, 0, 29);
         node = NULL;
     }
 
-    // Ao final, se desejar, podemos exibir a lista de aeronaves que temos armazenadas.
-    printf("\n\n========== Lista final de aeronaves armazenadas ==========\n");
+    // Optionally print the final list of aircraft from memory
+    printf("\n========== Lista final de aeronaves armazenadas ==========\n");
     adsbMsg *p = messagesList;
-    while(p) {
+    while (p) {
         printf("ICAO = %s | Callsign = %s | Lat = %f | Lon = %f | Alt = %d\n",
                 p->ICAO, p->callsign, p->Latitude, p->Longitude, p->Altitude);
         p = p->next;
     }
 
-    // Liberar memória da lista
+    // Free the list and log simulation end
     LIST_removeAll(&messagesList);
-
-    // Finaliza
-    printCpuUsage();
+    LOG_add("adsb_simulation", "Simulação de ADS-B encerrada");
     printf("Encerrando simulador ADS-B.\n");
+
     return 0;
 }
