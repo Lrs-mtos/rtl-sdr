@@ -478,7 +478,7 @@ DESCRIPTION: returns the node if it has at least
 two position messages (even, odd) plus altitude>0,
 and a non-empty ICAO. Then we consider it "complete."
 ================================================*/
-adsbMsg* isNodeComplete(adsbMsg *node){
+/* adsbMsg* isNodeComplete(adsbMsg *node){
     if(!node) return NULL;
     if(strlen(node->oeMSG[0]) && strlen(node->oeMSG[1])) {
         if(node->ICAO[0] && (node->Altitude>0)) {
@@ -486,8 +486,12 @@ adsbMsg* isNodeComplete(adsbMsg *node){
         }
     }
     return NULL;
+} */
+adsbMsg* isNodeComplete(adsbMsg *node){
+    if(node && node->ICAO[0] != '\0')
+        return node;
+    return NULL;
 }
-
 /*==============================================
 FUNCTION: clearMinimalInfo
 INPUT: pointer to adsbMsg

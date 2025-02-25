@@ -4783,3 +4783,13 @@ Mon Feb 24 02:17:36 2025 | adsb_simulation | Successfully decoded a message (nod
 Mon Feb 24 02:17:36 2025 | adsb_simulation | Successfully decoded a message (node != NULL)
 Mon Feb 24 02:17:36 2025 | adsb_simulation | Successfully decoded a message (node != NULL)
 Mon Feb 24 02:17:36 2025 | adsb_simulation | Simulação de ADS-B encerrada
+Tue Feb 25 12:11:56 2025 | adsb_simulation | Iniciando simulação de ADS-B...
+Tue Feb 25 12:11:56 2025 | adsb_simulation | Successfully decoded a message (node != NULL)
+Tue Feb 25 12:11:56 2025 | adsb_simulation | Simulação de ADS-B encerrada
+Tue Feb 25 12:18:11 2025 | adsb_simulation | Iniciando simulação de ADS-B...
+Tue Feb 25 12:18:11 2025 | adsb_simulation | Successfully decoded a message (node != NULL)
+Tue Feb 25 12:18:11 2025 | adsb_simulation | Calling DB_saveData (saving even with null values)
+Tue Feb 25 12:18:11 2025 | DB_saveADSBInfo | Data saved successfully
+Tue Feb 25 12:18:11 2025 | DB_saveAirline | Data saved successfully
+Tue Feb 25 12:18:11 2025 | DB_saveSystemMetrics | System metrics saved successfully
+Tue Feb 25 12:18:11 2025 | adsb_simulation | Simulação de ADS-B encerrada
